@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         tsinglan_network_acportalbrute
 // @namespace    http://tampermonkey.net/
-// @version      1.2
-// @description  测试账号密码登录
+// @version      1.3
+// @description  测试账号密码暴力登录
 // @author       Nytsai
 // @match        http://4.3.2.1/*
+// @updateURL    https://github.com/ShihanWu1029/tsinglan_network_acportalbrute/raw/refs/heads/main/main.user.js
+// @installURL   https://github.com/ShihanWu1029/tsinglan_network_acportalbrute/raw/refs/heads/main/main.user.js
 // ==/UserScript==
 
 (function() {
