@@ -45,4 +45,4 @@ This tool is intended for legitimate testing on systems you own or have explicit
 ## Installation
 
 Install (placeholder): 
-[Install (Github Source)](https://github.com/ShihanWu1029/tsinglan_network_acportalbrute/raw/refs/heads/main/main.user.js)
+[Install (Github Source)](https://github.com/Nytsai1029/tsinglan_network_acportalbrute/raw/refs/heads/main/main.user.js)
