@@ -46,5 +46,3 @@ This tool is intended for legitimate testing on systems you own or have explicit
 
 Install (placeholder): 
 [Install (Github Source)](https://github.com/ShihanWu1029/tsinglan_network_acportalbrute/raw/refs/heads/main/main.user.js)
-
-Replace the above placeholder with the actual script installation link or local path when ready.

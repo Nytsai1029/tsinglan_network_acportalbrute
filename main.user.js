@@ -439,39 +439,91 @@
                 alert('No successful accounts to export');
                 return;
             }
-            // 构造每行 "account,password"
+            // construct lines "account,password"
             const lines = keys.map(k => `${k},${map[k]}`);
             const txt = lines.join('\n');
 
-            // 弹窗让用户选择：确定=复制，取消=下载文件
-            const doCopy = confirm('Click OK to copy to clipboard, Cancel to download as file');
-            if (doCopy) {
-                // 复制到剪贴板
+            // create a simple modal dialog with three options: Copy / Download / Cancel
+            const overlay = document.createElement('div');
+            overlay.style.position = 'fixed';
+            overlay.style.left = '0';
+            overlay.style.top = '0';
+            overlay.style.right = '0';
+            overlay.style.bottom = '0';
+            overlay.style.background = 'rgba(0,0,0,0.35)';
+            overlay.style.zIndex = 20000;
+            overlay.style.display = 'flex';
+            overlay.style.alignItems = 'center';
+            overlay.style.justifyContent = 'center';
+
+            const modal = document.createElement('div');
+            modal.style.width = '360px';
+            modal.style.maxWidth = '90%';
+            modal.style.background = '#fff';
+            modal.style.borderRadius = '8px';
+            modal.style.padding = '16px';
+            modal.style.boxShadow = '0 12px 32px rgba(2,6,23,0.2)';
+            modal.style.fontFamily = 'Segoe UI, Roboto, Arial, sans-serif';
+
+            modal.innerHTML = `
+                <div style="margin-bottom:12px;font-weight:700;">Export successful accounts</div>
+                <div style="margin-bottom:12px;color:#334155;font-size:13px;">Choose an action for the exported list (account,password per line):</div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;">
+                    <button id="exportCopy" style="padding:8px 12px;border-radius:6px;border:none;background:transparent;color:transparent;cursor:pointer;font-weight:700;">Copy</button>
+                    <button id="exportDownload" style="padding:8px 12px;border-radius:6px;border:none;background:#0891b2;color:#fff;cursor:pointer;font-weight:700;">Download</button>
+                    <button id="exportCancel" style="padding:8px 12px;border-radius:6px;border:1px solid #e6eef6;background:#fff;color:#334155;cursor:pointer;">Cancel</button>
+                </div>
+            `;
+
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+
+            function removeModal() {
+                try { overlay.remove(); } catch (e) { overlay.parentNode && overlay.parentNode.removeChild(overlay); }
+            }
+
+            // Copy handler
+            modal.querySelector('#exportCopy').addEventListener('click', () => {
                 navigator.clipboard?.writeText(txt).then(() => {
                     alert('Copied successful accounts to clipboard');
+                    removeModal();
                 }).catch(() => {
-                    // fallback: 创建临时 textarea
+                    // fallback copy
                     const ta = document.createElement('textarea');
                     ta.value = txt;
                     document.body.appendChild(ta);
                     ta.select();
                     try { document.execCommand('copy'); alert('Copied successful accounts to clipboard'); } catch(e){ alert('Copy failed'); }
                     ta.remove();
+                    removeModal();
                 });
-                return;
-            }
+            });
 
-            // 下载文件
-            const blob = new Blob([txt], {type:'text/plain;charset=utf-8'});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'success_accounts_with_passwords.txt';
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
-            alert('Downloaded successful accounts file');
+            // Download handler
+            modal.querySelector('#exportDownload').addEventListener('click', () => {
+                const blob = new Blob([txt], {type:'text/plain;charset=utf-8'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'success_accounts_with_passwords.txt';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                alert('Downloaded successful accounts file');
+                removeModal();
+            });
+
+            // Cancel handler
+            modal.querySelector('#exportCancel').addEventListener('click', () => {
+                removeModal();
+            });
+
+            // Close on ESC
+            function onKey(e) {
+                if (e.key === 'Escape') removeModal();
+            }
+            document.addEventListener('keydown', onKey, {once:true});
         });
 
         document.getElementById('clearSuccess').addEventListener('click', () => {
